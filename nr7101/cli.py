@@ -11,7 +11,6 @@ RETRY_COUNT = 2
 
 logger = logging.getLogger(__name__)
 
-
 def cli():
     parser = argparse.ArgumentParser(
         description=f"NR7101 status fetcher v{__version__}"
@@ -29,13 +28,20 @@ def cli():
         action="store_true",
         help="Reboot the unit regardless of the connection status",
     )
+    parser.add_argument(
+        "--oid",
+        action="store",
+        help="--oid OID \
+    Specify a single oid to use. (under cgi-bin/DAL?) \
+    Otherwise the default oids \"cellwan_status\" and \"Traffic_Status\" are used"
+    )
     parser.add_argument("url")
     parser.add_argument("username")
     parser.add_argument("password")
 
     args = parser.parse_args()
 
-    dev = NR7101(args.url, args.username, args.password)
+    dev = NR7101(args.url, args.username, args.password, args.oid )
 
     if not args.no_cookie:
         dev.load_cookies(args.cookie)
@@ -69,10 +75,12 @@ def cli():
         return 1
 
     do_reboot = False
-    if status["cellular"]["INTF_Status"] == "Down":
-        logger.warn("The connection is down.")
-        if args.reboot:
-            do_reboot = True
+    # Only try this if oid not set
+    if ( not args.oid ):
+        if status["cellular"]["INTF_Status"] == "Down":
+            logger.warn("The connection is down.")
+            if args.reboot:
+                do_reboot = True
 
     if do_reboot or args.force_reboot:
         logger.warn("Rebooting")
@@ -80,9 +88,7 @@ def cli():
 
     return 0
 
-
 if __name__ == "__main__":
     import sys
-
     rc = cli()
     sys.exit(rc)

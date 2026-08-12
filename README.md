@@ -126,3 +126,26 @@ regardless of the connection status, use `--force-reboot`.
   }
 }
 ```
+
+## Added option to specify oid under /cgi-bin/DAL?oid=
+
+Some oids under `/cgi-bin/DAL` that may be of interest:
+- cardpage_status
+- status
+- cellwan_gnss
+- user_account
+- firewall
+
+For example firewall since it short:
+
+```
+$ python3 -m nr7101.cli https://HOSTNAME USER PASS --oid firewall        
+{
+  "firewall": {
+    "IPv4_Enable": true,
+    "IPv6_Enable": true,
+    "enableDos": true,
+    "Level_GUI": "Low"
+  }
+}```
+

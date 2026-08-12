@@ -15,7 +15,7 @@ class NR7101Exception(Exception):
 
 
 class NR7101:
-    def __init__(self, url, username, password, params={}):
+    def __init__(self, url, username, password, oid, params={}):
         self.url = url
         self.params = params
         password_b64 = base64.b64encode(password.encode("utf-8")).decode("utf-8")
@@ -27,6 +27,7 @@ class NR7101:
             "SHA512_password": False,
         }
         self.sessionkey = None
+        self.oid = oid #for oid option
 
         # NR7101 is using by default self-signed certificates, so ignore the warnings
         self.params["verify"] = False
@@ -90,6 +91,7 @@ class NR7101:
         with requests.get(self.url + "/UserLoginCheck", **self.params) as r:
             assert r.status_code == 200
 
+#    def get_status(self, retries=2, oid_list):
     def get_status(self, retries=2):
         def parse_traffic_object(obj):
             ret = {}
@@ -99,12 +101,22 @@ class NR7101:
 
         while retries > 0:
             try:
-                cellular = self.get_json_object("cellwan_status")
-                traffic = parse_traffic_object(self.get_json_object("Traffic_Status"))
-                return {
+                if ( self.oid ):
+                   # --oid OID 
+                   logger.debug("Using --oid option") 
+                   oid_result = self.get_json_object( self.oid )
+                   return {
+                       self.oid: oid_result,
+                   }
+                else:
+                   # Default behaviour 
+                   print("use cellwan_status, Traffic_Status") 
+                   cellular = self.get_json_object("cellwan_status")
+                   traffic = parse_traffic_object(self.get_json_object("Traffic_Status"))
+                   return {
                     "cellular": cellular,
                     "traffic": traffic,
-                }
+                   }
             except requests.exceptions.HTTPError as e:
                 logger.warn(e)
                 if e.response.status_code == 401:
@@ -125,6 +137,9 @@ class NR7101:
             j = r.json()
             assert j["result"] == "ZCFG_SUCCESS"
             return j["Object"][0]
+
+    # TODO: Could add option for custom path and query
+    # and return either JSON or RAW data.
 
     def reboot(self):
         if self.sessionkey is None:
