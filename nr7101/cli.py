@@ -63,9 +63,9 @@ def cli():
                 dev.store_cookies(args.cookie)
             break
         except OSError:
-            logger.warn("Unable to connect")
+            logger.warning("Unable to connect")
         except TimeoutError:
-            logger.warn("Timeout")
+            logger.warning("Timeout")
         except ConnectionError:
             pass
 
@@ -78,12 +78,12 @@ def cli():
     # Only try this if oid not set
     if ( not args.oid ):
         if status["cellular"]["INTF_Status"] == "Down":
-            logger.warn("The connection is down.")
+            logger.warning("The connection is down.")
             if args.reboot:
                 do_reboot = True
 
     if do_reboot or args.force_reboot:
-        logger.warn("Rebooting")
+        logger.warning("Rebooting")
         dev.reboot()
 
     return 0

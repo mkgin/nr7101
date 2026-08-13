@@ -61,7 +61,7 @@ class NR7101:
         except FileNotFoundError:
             logger.debug("Cookie file does not exist, ignoring.")
         except json.JSONDecodeError:
-            logger.warn("Ignoring invalid cookie file.")
+            logger.warning("Ignoring invalid cookie file.")
 
     def clear_cookies(self):
         self.params.pop("cookies", None)
@@ -70,7 +70,7 @@ class NR7101:
         try:
             cookies = self.params["cookies"]
         except KeyError:
-            logger.warn("No cookie to write")
+            logger.warning("No cookie to write")
             return
 
         with open(cookiefile, "wt") as f:
@@ -140,7 +140,7 @@ class NR7101:
                 # Burn a retry attempt and let the loop try again (or exit if retries run out)
                 retries -= 1
             except requests.exceptions.HTTPError as e:
-                logger.warn(e)
+                logger.warning("HTTPError: {e}")
                 if e.response.status_code == 401:
                     # Unauthorized
                     logger.info("Login")
