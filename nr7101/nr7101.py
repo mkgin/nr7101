@@ -8,6 +8,18 @@ import urllib3
 
 logger = logging.getLogger(__name__)
 
+class TimeoutHTTPAdapter(requests.adapters.HTTPAdapter):
+    """A custom transport adapter that injects a default timeout."""
+    # timeout suggested by AI, so that cron processes don't end up stacking up if a request fails
+    # based on this https://byteful.com/blog/python-requests-timeout-techniques-for-stability
+    def __init__(self, timeout=5, *args, **kwargs):
+        self.timeout = timeout
+        super().__init__(*args, **kwargs)
+
+    def send(self, request, **kwargs):
+        if kwargs.get("timeout") is None:
+            kwargs["timeout"] = self.timeout
+        return super().send(request, **kwargs)
 
 class NR7101Exception(Exception):
     def __init__(self, error):
@@ -28,6 +40,12 @@ class NR7101:
         }
         self.sessionkey = None
         self.oid = oid #for oid option
+        # self.session to wrap the Timeout adapter.
+        self.session = requests.Session()
+        # timeouts set in the tuple (3.5,10) on the next line
+        timeout_adapter = TimeoutHTTPAdapter(timeout=(3.5,10))
+        self.session.mount("http://", timeout_adapter)
+        self.session.mount("https://", timeout_adapter)
 
         # NR7101 is using by default self-signed certificates, so ignore the warnings
         self.params["verify"] = False
@@ -62,7 +80,7 @@ class NR7101:
     def login(self):
         login_json = json.dumps(self.login_params)
 
-        with requests.post(
+        with self.session.post(
             self.url + "/UserLogin", data=login_json, **self.params
         ) as r:
             if r.status_code != 200:
@@ -77,18 +95,18 @@ class NR7101:
     def logout(self, sessionkey=None):
         if sessionkey is None:
             sessionkey = self.sessionkey
-        with requests.get(
+        with self.session.get(
             f"{self.url}/cgi-bin/UserLogout?sessionkey={sessionkey}", **self.params
         ) as r:
             assert r.status_code == 200
 
     def connect(self):
-        with requests.get(self.url + "/getBasicInformation", **self.params) as r:
+        with self.session.get(self.url + "/getBasicInformation", **self.params) as r:
             assert r.status_code == 200
             assert r.json()["result"] == "ZCFG_SUCCESS", "Connection failure"
 
         # Check login
-        with requests.get(self.url + "/UserLoginCheck", **self.params) as r:
+        with self.session.get(self.url + "/UserLoginCheck", **self.params) as r:
             assert r.status_code == 200
 
 #    def get_status(self, retries=2, oid_list):
@@ -117,6 +135,10 @@ class NR7101:
                     "cellular": cellular,
                     "traffic": traffic,
                    }
+            except requests.exceptions.Timeout as e:
+                logger.warning(f"Router connection timed out: {e}")
+                # Burn a retry attempt and let the loop try again (or exit if retries run out)
+                retries -= 1
             except requests.exceptions.HTTPError as e:
                 logger.warn(e)
                 if e.response.status_code == 401:
@@ -132,7 +154,7 @@ class NR7101:
         return None
 
     def get_json_object(self, oid):
-        with requests.get(self.url + "/cgi-bin/DAL?oid=" + oid, **self.params) as r:
+        with self.session.get(self.url + "/cgi-bin/DAL?oid=" + oid, **self.params) as r:
             r.raise_for_status()
             j = r.json()
             assert j["result"] == "ZCFG_SUCCESS"
@@ -146,7 +168,7 @@ class NR7101:
             self.login()
 
         logger.info("Rebooting...")
-        with requests.post(
+        with self.session.post(
             f"{self.url}/cgi-bin/Reboot?sessionkey={self.sessionkey}", **self.params
         ) as r:
             r.raise_for_status()
